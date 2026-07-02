@@ -1,5 +1,8 @@
+import logging
 import os
 from watch_contract import BaseCrawler, Item, CrawlerException
+
+logger = logging.getLogger(__name__)
 
 _SEARCH_URL = "https://www.wanted.co.kr/search?query={keyword}&tab=position"
 
@@ -54,6 +57,8 @@ class WantedCrawler(BaseCrawler):
                 except Exception:
                     continue
 
+            logger.info("파싱 완료: %d개", len(items))
             return items
         except Exception as e:
+            logger.error("crawl 예외: %s", e)
             raise CrawlerException(str(e)) from e
