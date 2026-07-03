@@ -1,5 +1,7 @@
 import logging
-from watch_contract import BaseCrawler, Item, CrawlerException
+
+from bs4 import BeautifulSoup
+from watch_contract import RenderCrawler, Item, CrawlerException
 
 logger = logging.getLogger(__name__)
 
@@ -12,37 +14,39 @@ _COMPANY_SELECTOR = "span.JobCard_companyName__vZMqJ"
 _TAGS_SELECTOR = "span.JobCard_skillLabel__yDFBt"
 
 
-class WantedCrawler(BaseCrawler):
-    async def crawl(self, page, keyword: str = "SLAM") -> list[Item]:
-        url = _SEARCH_URL.format(keyword=keyword)
-        try:
-            await page.goto(url, wait_until="networkidle", timeout=30000)
-            await page.wait_for_selector(_JOB_SELECTOR, timeout=10000)
+class WantedCrawler(RenderCrawler):
+    def render_request(self, params: dict) -> dict:
+        keyword = params.get("keyword", "SLAM")
+        return {
+            "url": _SEARCH_URL.format(keyword=keyword),
+            "wait_for": _JOB_SELECTOR,
+        }
 
-            jobs = await page.query_selector_all(_JOB_SELECTOR)
+    def parse(self, html: str, params: dict) -> list[Item]:
+        try:
+            soup = BeautifulSoup(html, "html.parser")
             items = []
-            for job in jobs:
+            for job in soup.select(_JOB_SELECTOR):
                 try:
-                    title_el = await job.query_selector(_TITLE_SELECTOR)
+                    title_el = job.select_one(_TITLE_SELECTOR)
                     if not title_el:
                         continue
-                    title = (await title_el.inner_text()).strip()
+                    title = title_el.get_text(strip=True)
 
                     # 원티드는 카드 자체가 링크
-                    href = await job.get_attribute("href")
+                    href = job.get("href")
                     if not href:
-                        a_el = await job.query_selector("a")
-                        href = await a_el.get_attribute("href") if a_el else None
+                        a_el = job.select_one("a")
+                        href = a_el.get("href") if a_el else None
                     if not href:
                         continue
                     if not href.startswith("http"):
                         href = f"https://www.wanted.co.kr{href}"
 
-                    company_el = await job.query_selector(_COMPANY_SELECTOR)
-                    company = (await company_el.inner_text()).strip() if company_el else ""
+                    company_el = job.select_one(_COMPANY_SELECTOR)
+                    company = company_el.get_text(strip=True) if company_el else ""
 
-                    tag_els = await job.query_selector_all(_TAGS_SELECTOR)
-                    tags = [await el.inner_text() for el in tag_els]
+                    tags = [el.get_text(strip=True) for el in job.select(_TAGS_SELECTOR)]
 
                     items.append(Item(
                         id=href,
@@ -56,5 +60,5 @@ class WantedCrawler(BaseCrawler):
             logger.info("파싱 완료: %d개", len(items))
             return items
         except Exception as e:
-            logger.error("crawl 예외: %s", e)
+            logger.error("parse 예외: %s", e)
             raise CrawlerException(str(e)) from e
