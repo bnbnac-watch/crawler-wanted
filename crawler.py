@@ -7,11 +7,8 @@ logger = logging.getLogger(__name__)
 
 _SEARCH_URL = "https://www.wanted.co.kr/search?query={keyword}&tab=position"
 
-# 아래 셀렉터는 실제 페이지 구조 확인 후 수정 필요
-_JOB_SELECTOR = "li.JobCard_container__REty6"
-_TITLE_SELECTOR = "strong.JobCard_title__HBpZf"
-_COMPANY_SELECTOR = "span.JobCard_companyName__vZMqJ"
-_TAGS_SELECTOR = "span.JobCard_skillLabel__yDFBt"
+# CSS Module 클래스명은 프론트 배포마다 해시가 바뀌므로 안정적인 data-* 속성으로 선택
+_JOB_SELECTOR = "a[data-position-id]"
 
 
 class WantedCrawler(RenderCrawler):
@@ -28,31 +25,23 @@ class WantedCrawler(RenderCrawler):
             items = []
             for job in soup.select(_JOB_SELECTOR):
                 try:
-                    title_el = job.select_one(_TITLE_SELECTOR)
-                    if not title_el:
+                    title = job.get("data-position-name")
+                    if not title:
                         continue
-                    title = title_el.get_text(strip=True)
 
-                    # 원티드는 카드 자체가 링크
                     href = job.get("href")
-                    if not href:
-                        a_el = job.select_one("a")
-                        href = a_el.get("href") if a_el else None
                     if not href:
                         continue
                     if not href.startswith("http"):
                         href = f"https://www.wanted.co.kr{href}"
 
-                    company_el = job.select_one(_COMPANY_SELECTOR)
-                    company = company_el.get_text(strip=True) if company_el else ""
-
-                    tags = [el.get_text(strip=True) for el in job.select(_TAGS_SELECTOR)]
+                    company = job.get("data-company-name", "")
 
                     items.append(Item(
                         id=href,
                         title=title,
                         url=href,
-                        data={"company": company, "tags": tags},
+                        data={"company": company},
                     ))
                 except Exception:
                     continue
