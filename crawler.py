@@ -37,8 +37,12 @@ class WantedCrawler(RenderCrawler):
 
                     company = job.get("data-company-name", "")
 
+                    # data-position-id는 원티드가 공고 식별용으로 직접 부여하는 값이라
+                    # href의 쿼리스트링 변동 여부와 무관하게 안정적
+                    position_id = job.get("data-position-id")
+
                     items.append(Item(
-                        id=href,
+                        id=position_id or href,
                         title=title,
                         url=href,
                         data={"company": company},
